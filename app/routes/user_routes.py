@@ -1,87 +1,61 @@
+"""Endpoints REST para el recurso 'users'."""
+
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Response, status
 
-from app.schemas.user_schema import UserCreate, UserResponse
+from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate
+from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
-
-users_db: list[dict] = [
-    {
-        "id": 1,
-        "name": "Facundo Cruz",
-        "email": "facundo.cruz@example.com",
-        "role": "admin",
-        "is_active": True,
-    },
-    {
-        "id": 2,
-        "name": "Carlos Vargas",
-        "email": "carlos.vargas@example.com",
-        "role": "support",
-        "is_active": True,
-    },
-    {
-        "id": 3,
-        "name": "Felipe Acevedo",
-        "email": "felipe.acevedo@example.com",
-        "role": "user",
-        "is_active": False,
-    },
-]
 
 
 def _set_custom_headers(response: Response) -> None:
     response.headers["X-App-Name"] = "device_systems"
-    response.headers["X-API-Version"] = "1.0"
+    response.headers["X-API-Version"] = "2.0"
 
-@router.get("", response_model=list[UserResponse])
+
+@router.get("", response_model=list[UserResponse], summary="Listar usuarios")
 def get_users(
     response: Response,
-    role: Literal["admin", "support", "user"] | None = Query(default=None),
-    is_active: bool | None = Query(default=None),
+    role: Literal["admin", "support", "user"] | None = None,
+    is_active: bool | None = None,
 ) -> list[dict]:
     _set_custom_headers(response)
+    return user_service.list_users(role=role, is_active=is_active)
 
-    result = users_db
-    if role is not None:
-        result = [u for u in result if u["role"] == role]
-    if is_active is not None:
-        result = [u for u in result if u["is_active"] == is_active]
 
-    return result
-
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=UserResponse, summary="Consultar usuario por ID")
 def get_user_by_id(user_id: int, response: Response) -> dict:
     _set_custom_headers(response)
+    return user_service.get_user(user_id)
 
-    for user in users_db:
-        if user["id"] == user_id:
-            return user
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Usuario con id {user_id} no fue encontrado.",
-    )
-
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=UserResponse, status_code=status.HTTP_201_CREATED,
+    summary="Crear usuario",
+)
 def create_user(user: UserCreate, response: Response) -> dict:
     _set_custom_headers(response)
+    return user_service.create_user(user)
 
-    if any(existing["email"] == user.email for existing in users_db):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El correo '{user.email}' ya se encuentra registrado.",
-        )
 
-    new_id = max((u["id"] for u in users_db), default=0) + 1
-    new_user = {
-        "id": new_id,
-        "name": user.name,
-        "email": user.email,
-        "role": user.role,
-        "is_active": user.is_active,
-    }
-    users_db.append(new_user)
+@router.put("/{user_id}", response_model=UserResponse, summary="Actualizar usuario completo")
+def replace_user(user_id: int, user: UserCreate, response: Response) -> dict:
+    _set_custom_headers(response)
+    return user_service.replace_user(user_id, user)
 
-    return new_user
+
+@router.patch("/{user_id}", response_model=UserResponse, summary="Actualizar usuario parcial")
+def update_user_partial(user_id: int, user: UserUpdate, response: Response) -> dict:
+    _set_custom_headers(response)
+    return user_service.update_user_partial(user_id, user)
+
+
+@router.delete(
+    "/{user_id}", status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar usuario",
+)
+def delete_user(user_id: int, response: Response) -> None:
+    _set_custom_headers(response)
+    user_service.delete_user(user_id)
