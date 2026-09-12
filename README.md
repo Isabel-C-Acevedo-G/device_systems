@@ -185,4 +185,3 @@ API real: sin ella, una aplicación no podría recordar usuarios, pedidos,
 mensajes ni ninguna información entre una sesión y otra. Esta actividad me
 mostró el paso que separa un ejercicio de práctica de una aplicación que
 realmente podría usarse en producción.
-
