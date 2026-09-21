@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.database_dependency import get_db
-from app.schemas.loan_schema import LoanCreate, LoanResponse
+from app.schemas.loan_schema import LoanCreate, LoanDetailResponse, LoanResponse
 from app.services import loan_service
 
 router = APIRouter(prefix="/loans", tags=["Loans"])
@@ -15,6 +15,25 @@ router = APIRouter(prefix="/loans", tags=["Loans"])
 def _set_custom_headers(response: Response) -> None:
     response.headers["X-App-Name"] = "device_systems"
     response.headers["X-API-Version"] = "4.0"
+
+
+@router.get(
+    "/details",
+    response_model=list[LoanDetailResponse],
+    summary="Listar préstamos con detalle (join)",
+    description="Lista préstamos con la información completa del usuario y el dispositivo, con filtros opcionales.",
+)
+def get_loans_with_details(
+    response: Response,
+    status_filter: Literal["active", "returned", "overdue"] | None = None,
+    user_email: str | None = None,
+    device_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    _set_custom_headers(response)
+    return loan_service.list_loans_with_details(
+        db, status_filter=status_filter, user_email=user_email, device_type=device_type
+    )
 
 
 @router.get(

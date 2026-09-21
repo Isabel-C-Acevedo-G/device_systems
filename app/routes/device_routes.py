@@ -93,3 +93,17 @@ def update_device_partial(
 def delete_device(device_id: int, response: Response, db: Session = Depends(get_db)) -> None:
     _set_custom_headers(response)
     device_service.delete_device(db, device_id)
+
+from app.schemas.loan_schema import LoanResponse
+from app.services import loan_service
+
+
+@router.get(
+    "/{device_id}/loans",
+    response_model=list[LoanResponse],
+    summary="Historial de préstamos de un dispositivo",
+    description="Lista todos los préstamos (históricos) asociados a un dispositivo específico.",
+)
+def get_device_loans(device_id: int, response: Response, db: Session = Depends(get_db)):
+    _set_custom_headers(response)
+    return loan_service.get_loans_by_device(db, device_id)

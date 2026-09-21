@@ -97,3 +97,17 @@ def delete_user(
 ) -> None:
     _set_custom_headers(response)
     user_service.delete_user(db, user_id)
+
+from app.schemas.loan_schema import LoanResponse
+from app.services import loan_service
+
+
+@router.get(
+    "/{user_id}/loans",
+    response_model=list[LoanResponse],
+    summary="Préstamos de un usuario",
+    description="Lista todos los préstamos asociados a un usuario específico.",
+)
+def get_user_loans(user_id: int, response: Response, db: Session = Depends(get_db)):
+    _set_custom_headers(response)
+    return loan_service.get_loans_by_user(db, user_id)

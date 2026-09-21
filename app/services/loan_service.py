@@ -78,3 +78,48 @@ def return_loan(db: Session, loan_id: int) -> Loan:
     db.commit()
     db.refresh(loan)
     return loan
+
+def list_loans_with_details(
+    db: Session,
+    status_filter: str | None = None,
+    user_email: str | None = None,
+    device_type: str | None = None,
+) -> list[Loan]:
+    query = db.query(Loan).join(User).join(Device)
+    if status_filter is not None:
+        query = query.filter(Loan.status == status_filter)
+    if user_email is not None:
+        query = query.filter(User.email.ilike(f"%{user_email}%"))
+    if device_type is not None:
+        query = query.filter(Device.device_type == device_type)
+    return query.order_by(Loan.loan_date.desc()).all()
+
+
+def get_loans_by_user(db: Session, user_id: int) -> list[Loan]:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+    return (
+        db.query(Loan)
+        .filter(Loan.user_id == user_id)
+        .order_by(Loan.loan_date.desc())
+        .all()
+    )
+
+
+def get_loans_by_device(db: Session, device_id: int) -> list[Loan]:
+    device = db.query(Device).filter(Device.id == device_id).first()
+    if device is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dispositivo no encontrado",
+        )
+    return (
+        db.query(Loan)
+        .filter(Loan.device_id == device_id)
+        .order_by(Loan.loan_date.desc())
+        .all()
+    )
