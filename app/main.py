@@ -4,7 +4,8 @@ from fastapi import FastAPI
 
 from app.database.connection import Base, engine
 from app.routes.user_routes import router as user_router
-
+from app.routes.device_routes import router as device_router
+from app.models import User, Device, Loan  # noqa: F401
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -14,7 +15,7 @@ app = FastAPI(
 )
 
 app.include_router(user_router)
-
+app.include_router(device_router)
 
 @app.get("/", tags=["Root"])
 def read_root() -> dict:
