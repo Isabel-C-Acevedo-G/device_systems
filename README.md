@@ -1,10 +1,10 @@
 # Device Systems API
 
-API REST desarrollada con FastAPI, SQLAlchemy, Alembic y ahora con una capa completa de seguridad (OAuth2, JWT, hash de contraseñas, CORS, middleware y rate limiting).
+API REST desarrollada con **FastAPI**, **SQLAlchemy**, **Alembic** y una capa completa de **seguridad** (OAuth2, JWT, hash de contraseñas, roles, CORS, middleware y rate limiting).
 
 ## Descripción general
 
-device_systems gestiona usuarios, dispositivos y préstamos, con persistencia real en base de datos, relaciones entre modelos, migraciones versionadas y, desde esta actividad, autenticación y protección de rutas.
+`device_systems` gestiona usuarios, dispositivos y préstamos, con persistencia real en base de datos, relaciones entre modelos, migraciones versionadas, y autenticación/autorización completa por roles.
 
 ## Tecnologías utilizadas
 
@@ -21,14 +21,15 @@ device_systems gestiona usuarios, dispositivos y préstamos, con persistencia re
 
 ## Instalación de dependencias
 
-bash
+```bash
 uv sync
-
+```
 
 ## Ejecución del servidor
 
-bash
+```bash
 uv run uvicorn app.main:app --reload
+```
 
 Documentación interactiva:
 - Swagger UI: http://127.0.0.1:8000/docs
@@ -57,55 +58,67 @@ device_systems/
 
 ## Recurso nuevo: /auth
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | /auth/register | Registra un usuario nuevo con contraseña segura (hash) |
-| POST | /auth/login | Autentica y devuelve un token JWT |
-| GET | /auth/me | Devuelve los datos del usuario autenticado actual |
+| Método | Ruta | Descripción | Límite |
+|---|---|---|---|
+| POST | /auth/register | Registra un usuario nuevo con contraseña segura (hash) | 3/minuto |
+| POST | /auth/login | Autentica y devuelve un token JWT | 5/minuto |
+| GET | /auth/me | Devuelve los datos del usuario autenticado actual | — |
 
 ## Autenticación y seguridad implementadas
 
-- Hash de contraseñas con passlib (bcrypt)**: las contraseñas nunca se guardan en texto plano. Se almacenan como `hashed_password` en el modelo `User`.
-- JWT (JSON Web Token): al hacer login exitoso, se genera un token firmado que el cliente debe enviar en la cabecera `Authorization: Bearer <token>` para acceder a rutas protegidas.
-- Rutas protegidas: GET /users requiere un token válido (get_current_active_user). Sin token o con token inválido, responde 401 Unauthorized`.
-- Roles y autorización: se implementaron dependencias require_admin y `require_admin_or_support` para restringir operaciones según el rol del usuario.
-- Validaciones avanzadas con Pydantic v2: el schema UserRegister usa `field_validator` para exigir que la contraseña tenga mínimo 8 caracteres, al menos una mayúscula, una minúscula, un número y sin espacios.
+- **Hash de contraseñas con passlib (bcrypt)**: las contraseñas nunca se guardan en texto plano, se almacenan como `hashed_password`.
+- **JWT (JSON Web Token)**: al hacer login exitoso, se genera un token firmado que el cliente envía en `Authorization: Bearer <token>` para acceder a rutas protegidas.
+- **Validaciones avanzadas con Pydantic v2**: `UserRegister` usa `field_validator` para exigir contraseña con mínimo 8 caracteres, mayúscula, minúscula, número y sin espacios.
+
+## Rutas protegidas por rol
+
+| Ruta | Método | Protección |
+|---|---|---|
+| /users | GET | Usuario autenticado |
+| /users/{user_id} | GET | Usuario autenticado |
+| /devices | POST | Admin o support |
+| /devices/{device_id} | PUT | Admin o support |
+| /devices/{device_id} | DELETE | Admin |
+| /loans | POST | Usuario autenticado |
+| /loans/{loan_id}/return | PATCH | Admin o support |
+| /loans/details | GET | Admin o support |
+
+Sin token válido → `401 Unauthorized`. Con token válido pero sin el rol requerido → `403 Forbidden`.
 
 ## Middleware personalizado
 
-Se implementó `RequestMiddleware`, que se ejecuta en todas las peticiones y agrega:
-
-- X-App-Name: device_systems
-- X-Process-Time: tiempo de respuesta de la petición, en segundos
-- X-Request-ID: identificador único de la petición (generado o propagado si el cliente lo envía)
-
-Además, registra en consola el método, la ruta y el código de estado de cada petición.
+`RequestMiddleware` se ejecuta en todas las peticiones y agrega:
+- `X-App-Name: device_systems`
+- `X-Process-Time`: tiempo de respuesta en segundos
+- `X-Request-ID`: identificador único de la petición
 
 ## CORS configurado
 
-python
+```python
 allow_origins=["http://localhost:5173", "http://localhost:3000"]
 allow_credentials=True
 allow_methods=["*"]
 allow_headers=["*"]
-
+```
 
 ### ¿Por qué no usar `allow_origins=["*"]` en producción con credenciales?
 
-Cuando allow_credentials=True, el navegador exige que los orígenes permitidos estén listados explícitamente. Usar "*" (comodín) junto con credenciales expondría la API a que cualquier sitio web pueda enviar peticiones autenticadas en nombre del usuario (riesgo de CSRF o robo de sesión), ya que no habría control de qué dominios son realmente confiables. Por eso siempre se deben listar solo los dominios específicos y verificados del frontend real.
+Cuando `allow_credentials=True`, el navegador exige orígenes explícitos. Usar `"*"` junto con credenciales expondría la API a que cualquier sitio web pueda enviar peticiones autenticadas en nombre del usuario (riesgo de CSRF/robo de sesión). Por eso siempre se listan solo los dominios verificados del frontend real.
 
 ## Rate limiting
 
-Se instaló y configuró slowapi para limitar peticiones abusivas, devolviendo 429 Too Many Requests cuando se supera el límite configurado en endpoints sensibles como `/auth/login` y `/auth/register`.
+Implementado con **slowapi**:
+- `POST /auth/register`: 3 peticiones por minuto
+- `POST /auth/login`: 5 peticiones por minuto
+
+Al superar el límite, la API responde `429 Too Many Requests`.
 
 ## Migración Alembic
 
-Se generó una migración para agregar el campo hashed_password al modelo `User`:
-
-bash
+```bash
 alembic revision --autogenerate -m "add authentication fields to users"
 alembic upgrade head
-
+```
 
 ## Capturas de evidencia
 
@@ -117,6 +130,8 @@ alembic upgrade head
 
 ![Acceso sin token - 401](Imagenes/sin-token-401.png)
 
-## Reflexión sobre la importancia de la seguridad en APIs REST
+![Rate limiting activado - 429, con cabeceras del middleware visibles](Imagenes/rate-limiting-429.png)
 
-En esta actividad se puede ver que una API funcional no es suficiente si no está protegida. Aprendí que las contraseñas nunca deben guardarse en texto plano, y que el hash (con passlib/bcrypt) permite verificar una contraseña sin necesidad de almacenarla de forma reversible. JWT me permitió entender cómo un servidor puede "recordar" que un usuario inició sesión sin guardar estado en el servidor, ya que toda la información viaja firmada dentro del token. También comprendí la importancia del middleware para tener trazabilidad de cada petición, y por qué CORS y el rate limiting son defensas esenciales contra el mal uso de una API pública.
+## Reflexión final sobre la importancia de la seguridad en APIs REST
+
+Esta actividad me mostró que una API funcional no es suficiente si no está protegida. Aprendí que las contraseñas nunca deben guardarse en texto plano, y que el hash (con passlib/bcrypt) permite verificar una contraseña sin necesidad de almacenarla de forma reversible. JWT me permitió entender cómo un servidor puede "recordar" que un usuario inició sesión sin guardar estado en el servidor, ya que toda la información viaja firmada dentro del token. Proteger cada ruta según el rol del usuario (admin, support, user) me enseñó la diferencia entre autenticación (quién eres) y autorización (qué puedes hacer). También comprendí la importancia del middleware para tener trazabilidad de cada petición, y por qué CORS y el rate limiting son defensas esenciales contra el mal uso de una API pública.
