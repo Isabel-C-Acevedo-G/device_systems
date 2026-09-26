@@ -6,25 +6,26 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.database_dependency import get_db
-from app.schemas.user_schema import UserCreate, UserPatch, UserResponse, UserUpdate
-from app.services import user_service
 from app.dependencies.auth_dependency import get_current_active_user
 from app.models.user_model import User
-
+from app.schemas.user_schema import UserCreate, UserPatch, UserResponse, UserUpdate
+from app.schemas.loan_schema import LoanResponse
+from app.services import user_service
+from app.services import loan_service
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 def _set_custom_headers(response: Response) -> None:
     response.headers["X-App-Name"] = "device_systems"
-    response.headers["X-API-Version"] = "3.0"
+    response.headers["X-API-Version"] = "5.0"
 
 
 @router.get(
     "",
     response_model=list[UserResponse],
     summary="Listar usuarios",
-    description="Lista todos los usuarios, con filtros opcionales por rol y estado.",
+    description="Lista todos los usuarios, con filtros opcionales por rol y estado. Requiere autenticación.",
 )
 def get_users(
     response: Response,
@@ -41,10 +42,13 @@ def get_users(
     "/{user_id}",
     response_model=UserResponse,
     summary="Consultar usuario por ID",
-    description="Devuelve un usuario específico. Lanza 404 si no existe.",
+    description="Devuelve un usuario específico. Lanza 404 si no existe. Requiere autenticación.",
 )
 def get_user_by_id(
-    user_id: int, response: Response, db: Session = Depends(get_db)
+    user_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     _set_custom_headers(response)
     return user_service.get_user(db, user_id)
@@ -102,12 +106,9 @@ def delete_user(
     _set_custom_headers(response)
     user_service.delete_user(db, user_id)
 
-from app.schemas.loan_schema import LoanResponse
-from app.services import loan_service
-
 
 @router.get(
-"/{user_id}/loans",
+    "/{user_id}/loans",
     response_model=list[LoanResponse],
     summary="Préstamos de un usuario",
     description="Lista todos los préstamos asociados a un usuario específico.",

@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.database_dependency import get_db
+from app.dependencies.auth_dependency import get_current_active_user, require_admin_or_support
+from app.models.user_model import User
 from app.schemas.loan_schema import LoanCreate, LoanDetailResponse, LoanResponse
 from app.services import loan_service
 
@@ -14,14 +16,14 @@ router = APIRouter(prefix="/loans", tags=["Loans"])
 
 def _set_custom_headers(response: Response) -> None:
     response.headers["X-App-Name"] = "device_systems"
-    response.headers["X-API-Version"] = "4.0"
+    response.headers["X-API-Version"] = "5.0"
 
 
 @router.get(
     "/details",
     response_model=list[LoanDetailResponse],
     summary="Listar préstamos con detalle (join)",
-    description="Lista préstamos con la información completa del usuario y el dispositivo, con filtros opcionales.",
+    description="Lista préstamos con la información completa del usuario y el dispositivo. Requiere rol admin o support.",
 )
 def get_loans_with_details(
     response: Response,
@@ -29,6 +31,7 @@ def get_loans_with_details(
     user_email: str | None = None,
     device_type: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_support),
 ):
     _set_custom_headers(response)
     return loan_service.list_loans_with_details(
@@ -67,9 +70,14 @@ def get_loan_by_id(loan_id: int, response: Response, db: Session = Depends(get_d
     response_model=LoanResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear préstamo",
-    description="Registra un préstamo, validando que el usuario exista, el dispositivo exista y esté disponible.",
+    description="Registra un préstamo, validando que el usuario exista, el dispositivo exista y esté disponible. Requiere autenticación.",
 )
-def create_loan(loan: LoanCreate, response: Response, db: Session = Depends(get_db)):
+def create_loan(
+    loan: LoanCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
     _set_custom_headers(response)
     return loan_service.create_loan(db, loan)
 
@@ -78,8 +86,13 @@ def create_loan(loan: LoanCreate, response: Response, db: Session = Depends(get_
     "/{loan_id}/return",
     response_model=LoanResponse,
     summary="Devolver dispositivo",
-    description="Marca un préstamo como devuelto y libera el dispositivo asociado.",
+    description="Marca un préstamo como devuelto y libera el dispositivo asociado. Requiere rol admin o support.",
 )
-def return_loan(loan_id: int, response: Response, db: Session = Depends(get_db)):
+def return_loan(
+    loan_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_support),
+):
     _set_custom_headers(response)
     return loan_service.return_loan(db, loan_id)

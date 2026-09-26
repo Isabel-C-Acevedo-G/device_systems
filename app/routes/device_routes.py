@@ -4,15 +4,19 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.dependencies.database_dependency import get_db
+from app.dependencies.auth_dependency import require_admin, require_admin_or_support
+from app.models.user_model import User
 from app.schemas.device_schema import DeviceCreate, DeviceResponse, DeviceUpdate
+from app.schemas.loan_schema import LoanResponse
 from app.services import device_service
+from app.services import loan_service
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
 
 def _set_custom_headers(response: Response) -> None:
     response.headers["X-App-Name"] = "device_systems"
-    response.headers["X-API-Version"] = "4.0"
+    response.headers["X-API-Version"] = "5.0"
 
 
 @router.get(
@@ -51,9 +55,14 @@ def get_device_by_id(device_id: int, response: Response, db: Session = Depends(g
     response_model=DeviceResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear dispositivo",
-    description="Registra un dispositivo nuevo, validando que el número de serie sea único.",
+    description="Registra un dispositivo nuevo, validando que el número de serie sea único. Requiere rol admin o support.",
 )
-def create_device(device: DeviceCreate, response: Response, db: Session = Depends(get_db)):
+def create_device(
+    device: DeviceCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_support),
+):
     _set_custom_headers(response)
     return device_service.create_device(db, device)
 
@@ -62,10 +71,14 @@ def create_device(device: DeviceCreate, response: Response, db: Session = Depend
     "/{device_id}",
     response_model=DeviceResponse,
     summary="Actualizar dispositivo completo",
-    description="Reemplaza todos los campos de un dispositivo existente.",
+    description="Reemplaza todos los campos de un dispositivo existente. Requiere rol admin o support.",
 )
 def replace_device(
-    device_id: int, device: DeviceCreate, response: Response, db: Session = Depends(get_db)
+    device_id: int,
+    device: DeviceCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_support),
 ):
     _set_custom_headers(response)
     return device_service.replace_device(db, device_id, device)
@@ -88,14 +101,16 @@ def update_device_partial(
     "/{device_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Eliminar dispositivo",
-    description="Elimina un dispositivo existente.",
+    description="Elimina un dispositivo existente. Requiere rol admin.",
 )
-def delete_device(device_id: int, response: Response, db: Session = Depends(get_db)) -> None:
+def delete_device(
+    device_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> None:
     _set_custom_headers(response)
     device_service.delete_device(db, device_id)
-
-from app.schemas.loan_schema import LoanResponse
-from app.services import loan_service
 
 
 @router.get(
