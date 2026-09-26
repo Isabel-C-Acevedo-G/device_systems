@@ -8,6 +8,9 @@ from sqlalchemy.orm import Session
 from app.dependencies.database_dependency import get_db
 from app.schemas.user_schema import UserCreate, UserPatch, UserResponse, UserUpdate
 from app.services import user_service
+from app.dependencies.auth_dependency import get_current_active_user
+from app.models.user_model import User
+
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -28,6 +31,7 @@ def get_users(
     role: Literal["admin", "support", "user"] | None = None,
     is_active: bool | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ) -> list:
     _set_custom_headers(response)
     return user_service.list_users(db, role=role, is_active=is_active)
@@ -103,7 +107,7 @@ from app.services import loan_service
 
 
 @router.get(
-    "/{user_id}/loans",
+"/{user_id}/loans",
     response_model=list[LoanResponse],
     summary="Préstamos de un usuario",
     description="Lista todos los préstamos asociados a un usuario específico.",
