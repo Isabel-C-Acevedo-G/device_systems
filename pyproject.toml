@@ -9,6 +9,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.115",
     "passlib[bcrypt]>=1.7.4",
+    "pwdlib[argon2,bcrypt]>=0.3.1",
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.32",
     "slowapi>=0.1.10",

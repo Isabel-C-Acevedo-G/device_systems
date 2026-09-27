@@ -1,39 +1,28 @@
-"""Lógica de negocio para autenticación."""
+import hashlib
+import os
 
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+class PythonPureWrapper:
+    """Encriptador temporal compatible con Python 3.14 en desarrollo"""
+    def hash(self, password: str) -> str:
+        # Generamos una sal segura de forma nativa
+        salt = os.urandom(16).hex()
+        # Creamos el hash usando SHA-256 (nativo de Python, nunca falla)
+        hashed = hashlib.sha256((password + salt).encode()).hexdigest()
+        return f"{salt}${hashed}"
+        
+    def verify(self, plain_password: str, hashed_password: str) -> bool:
+        try:
+            salt, hashed = hashed_password.split("$")
+            check_hash = hashlib.sha256((plain_password + salt).encode()).hexdigest()
+            return check_hash == hashed
+        except Exception:
+            return False
 
-from app.auth.security import create_access_token, get_password_hash, verify_password
-from app.models.user_model import User
-from app.schemas.auth_schema import UserLogin, UserRegister
+# Declaramos los mapeos exactos que consumen tus archivos de rutas y servicios
+pwd_context = PythonPureWrapper()
 
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
 
-def register_user(db: Session, user: UserRegister) -> User:
-    existing = db.query(User).filter(User.email == user.email).first()
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El correo '{user.email}' ya está registrado.",
-        )
-    new_user = User(
-        name=user.name,
-        email=user.email,
-        hashed_password=get_password_hash(user.password),
-        role=user.role,
-        is_active=True,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
-
-
-def authenticate_user(db: Session, credentials: UserLogin) -> str:
-    user = db.query(User).filter(User.email == credentials.email).first()
-    if user is None or not verify_password(credentials.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrectos",
-        )
-    token = create_access_token(data={"sub": user.email})
-    return token
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
